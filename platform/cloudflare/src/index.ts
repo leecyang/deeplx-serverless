@@ -99,7 +99,7 @@ export async function withJsonHeartbeat(
   responsePromise: Promise<Response>,
   ctx: Pick<ExecutionContext, 'waitUntil'>,
   responseType: ResponseType,
-  initialDelayMs = 1500,
+  initialDelayMs = 500,
   heartbeatMs = 500,
 ): Promise<Response> {
   const ready = await Promise.race([
@@ -113,9 +113,9 @@ export async function withJsonHeartbeat(
   const encoder = new TextEncoder()
   const pump = (async () => {
     try {
-      // JSON permits leading whitespace. A full KiB makes intermediary proxies
-      // flush the chunk instead of buffering a one-byte heartbeat.
-      await writer.write(encoder.encode(' '.repeat(1024)))
+      // JSON permits leading whitespace. Four KiB crosses common intermediary
+      // buffering thresholds so each heartbeat is flushed to the client.
+      await writer.write(encoder.encode(' '.repeat(4096)))
       while (true) {
         const outcome = await Promise.race([
           responsePromise.then(response => ({ response })),
@@ -125,7 +125,7 @@ export async function withJsonHeartbeat(
           await writer.write(encoder.encode(await outcome.response.text()))
           break
         }
-        await writer.write(encoder.encode(' '.repeat(1024)))
+        await writer.write(encoder.encode(' '.repeat(4096)))
       }
       await writer.close()
     }
