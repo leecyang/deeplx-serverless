@@ -100,7 +100,7 @@ export async function withJsonHeartbeat(
   ctx: Pick<ExecutionContext, 'waitUntil'>,
   responseType: ResponseType,
   initialDelayMs = 2000,
-  heartbeatMs = 1500,
+  heartbeatMs = 1000,
 ): Promise<Response> {
   const ready = await Promise.race([
     responsePromise.then(response => ({ response })),
@@ -125,7 +125,7 @@ export async function withJsonHeartbeat(
           await writer.write(encoder.encode(await outcome.response.text()))
           break
         }
-        await writer.write(encoder.encode(' '.repeat(256)))
+        await writer.write(encoder.encode(' '.repeat(1024)))
       }
       await writer.close()
     }
