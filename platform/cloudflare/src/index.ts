@@ -99,7 +99,7 @@ export async function withJsonHeartbeat(
   responsePromise: Promise<Response>,
   ctx: Pick<ExecutionContext, 'waitUntil'>,
   responseType: ResponseType,
-  initialDelayMs = 500,
+  initialDelayMs = 50,
   heartbeatMs = 500,
 ): Promise<Response> {
   const ready = await Promise.race([
