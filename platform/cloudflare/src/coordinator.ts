@@ -52,7 +52,7 @@ export class TranslationCoordinator extends DurableObject<Env> {
   private active = 0
   private pending: PendingRequest[] = []
   private flushTimer: ReturnType<typeof setTimeout> | undefined
-  private flushing = false
+  private inFlightBatches = 0
   private statePromise: Promise<CoordinatorState> | undefined
   private warmupPromise: Promise<void> | undefined
 
@@ -296,44 +296,40 @@ export class TranslationCoordinator extends DurableObject<Env> {
     }
   }
 
-  private async flush(): Promise<void> {
-    if (this.flushing) { return }
-    this.flushing = true
+  private concurrency(): number {
+    return Math.max(1, Math.floor(numberVar(this.env.UPSTREAM_CONCURRENCY, 2)))
+  }
+
+  private async runBatch(batch: PendingRequest[]): Promise<void> {
     try {
-      while (this.pending.length) {
-        this.resolveExpired()
-        if (!this.pending.length) { break }
-        const concurrency = Math.max(1, Math.floor(numberVar(this.env.UPSTREAM_CONCURRENCY, 2)))
-        const batches: PendingRequest[][] = []
-        while (this.pending.length && batches.length < concurrency) {
-          batches.push(this.takeBatch())
-        }
-        await Promise.all(batches.map(async (batch) => {
-          try {
-            await this.executeBatch(batch)
-          }
-          catch {
-            const result = { ok: false, retryAfter: 10, reason: 'coordinator_error' } satisfies CoordinatorResult
-            batch.forEach(request => request.resolve(result))
-          }
-        }))
-      }
+      await this.executeBatch(batch)
+    }
+    catch {
+      const result = { ok: false, retryAfter: 10, reason: 'coordinator_error' } satisfies CoordinatorResult
+      batch.forEach(request => request.resolve(result))
     }
     finally {
-      this.flushing = false
+      this.inFlightBatches = Math.max(0, this.inFlightBatches - 1)
       if (this.pending.length) { this.scheduleFlush() }
     }
   }
 
+  private dispatch(): void {
+    this.flushTimer = undefined
+    this.resolveExpired()
+    while (this.pending.length && this.inFlightBatches < this.concurrency()) {
+      const batch = this.takeBatch()
+      this.inFlightBatches += 1
+      this.ctx.waitUntil(this.runBatch(batch))
+    }
+  }
+
   private scheduleFlush(): void {
-    if (this.flushTimer || this.flushing) { return }
+    if (this.flushTimer || this.inFlightBatches >= this.concurrency()) { return }
     const windowMs = Math.min(100, numberVar(this.env.UPSTREAM_BATCH_WINDOW_MS, 20))
     const earliestDeadline = Math.min(...this.pending.map(request => request.payload.deadline))
     const delay = Math.max(0, Math.min(windowMs, earliestDeadline - Date.now() - 1))
-    this.flushTimer = setTimeout(() => {
-      this.flushTimer = undefined
-      this.ctx.waitUntil(this.flush())
-    }, delay)
+    this.flushTimer = setTimeout(() => this.dispatch(), delay)
   }
 
   async fetch(request: Request): Promise<Response> {
