@@ -23,6 +23,7 @@ interface AppEnv {
   UPSTREAM_RPS?: string
   UPSTREAM_BURST?: string
   UPSTREAM_CONCURRENCY?: string
+  UPSTREAM_BATCH_WINDOW_MS?: string
   SYNC_DEADLINE_MS?: string
   ASYNC_DEADLINE_MS?: string
   SYNC_MAX_CHARS?: string
