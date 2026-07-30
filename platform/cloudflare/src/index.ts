@@ -95,6 +95,65 @@ function empty(status = 200): Response {
   return new Response(null, { status, headers: CORS_HEADERS })
 }
 
+export async function withJsonHeartbeat(
+  responsePromise: Promise<Response>,
+  ctx: Pick<ExecutionContext, 'waitUntil'>,
+  responseType: ResponseType,
+  initialDelayMs = 2000,
+  heartbeatMs = 1500,
+): Promise<Response> {
+  const ready = await Promise.race([
+    responsePromise.then(response => ({ response })),
+    scheduler.wait(initialDelayMs).then(() => null),
+  ])
+  if (ready) { return ready.response }
+
+  const { readable, writable } = new TransformStream()
+  const writer = writable.getWriter()
+  const encoder = new TextEncoder()
+  const pump = (async () => {
+    try {
+      // JSON permits leading whitespace. A full KiB makes intermediary proxies
+      // flush the chunk instead of buffering a one-byte heartbeat.
+      await writer.write(encoder.encode(' '.repeat(1024)))
+      while (true) {
+        const outcome = await Promise.race([
+          responsePromise.then(response => ({ response })),
+          scheduler.wait(heartbeatMs).then(() => null),
+        ])
+        if (outcome) {
+          await writer.write(encoder.encode(await outcome.response.text()))
+          break
+        }
+        await writer.write(encoder.encode(' '.repeat(256)))
+      }
+      await writer.close()
+    }
+    catch {
+      try {
+        const fallback = responseType === 'official'
+          ? { message: 'DeepL is temporarily unavailable', retry_after: 10 }
+          : { code: 503, msg: 'DeepL is temporarily unavailable', retry_after: 10 }
+        await writer.write(encoder.encode(JSON.stringify(fallback)))
+        await writer.close()
+      }
+      catch {
+        await writer.abort()
+      }
+    }
+  })()
+  ctx.waitUntil(pump)
+  return new Response(readable, {
+    status: 200,
+    headers: {
+      ...CORS_HEADERS,
+      'Cache-Control': 'no-store, no-transform',
+      'Content-Encoding': 'identity',
+      'X-DeepLX-Heartbeat': '1',
+    },
+  })
+}
+
 function temporary(responseType: ResponseType, message: string, retryAfter: number): Response {
   const seconds = Math.max(1, Math.ceil(retryAfter))
   return json(
@@ -554,8 +613,12 @@ export default {
       if (!isAuthorized(request, env.token)) { return forbidden('official') }
       return json({ character_count: 0, character_limit: 1_000_000_000 })
     }
-    if (url.pathname === '/v2/translate') { return handleTranslate(request, env, ctx, 'official') }
-    if (url.pathname === '/translate') { return handleTranslate(request, env, ctx, 'deeplx') }
+    if (url.pathname === '/v2/translate') {
+      return withJsonHeartbeat(handleTranslate(request, env, ctx, 'official'), ctx, 'official')
+    }
+    if (url.pathname === '/translate') {
+      return withJsonHeartbeat(handleTranslate(request, env, ctx, 'deeplx'), ctx, 'deeplx')
+    }
     if (url.pathname === '/jobs' && request.method === 'POST') { return createJob(request, env) }
     const match = url.pathname.match(/^\/jobs\/([0-9a-f-]+)$/i)
     if (match && request.method === 'GET') { return readJob(request, env, match[1]) }
