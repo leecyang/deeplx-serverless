@@ -97,7 +97,7 @@ describe('translation coordinator micro-batching', () => {
       }
       const body = JSON.parse(String(init?.body)) as { text: string[] }
       upstreamBodies.push(body)
-      await scheduler.wait(100)
+      await scheduler.wait(300)
       return Response.json({
         translations: body.text.map(text => ({
           text: `zh:${text}`,
@@ -119,7 +119,7 @@ describe('translation coordinator micro-batching', () => {
     }).then(response => response.json<CoordinatorResult>())
 
     const first = send('first')
-    await scheduler.wait(40)
+    await scheduler.wait(120)
     const later = Array.from({ length: 10 }, (_, index) => send(`later-${index}`))
     const results = await Promise.all([first, ...later])
 

@@ -215,6 +215,7 @@ export class TranslationCoordinator extends DurableObject<Env> {
 
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), Math.max(1, deadline - Date.now()))
+    const attemptStartedAt = Date.now()
     try {
       await this.warmCookies(state, deadline)
       const headers = new Headers({
@@ -274,9 +275,11 @@ export class TranslationCoordinator extends DurableObject<Env> {
         batch.forEach(request => request.resolve(result))
         return
       }
-      state.failures = 0
-      state.halfOpen = false
-      state.circuitUntil = 0
+      if (state.circuitUntil <= attemptStartedAt) {
+        state.failures = 0
+        state.halfOpen = false
+        state.circuitUntil = 0
+      }
       await this.ctx.storage.put('state', state)
       let offset = 0
       for (const request of batch) {
@@ -326,7 +329,7 @@ export class TranslationCoordinator extends DurableObject<Env> {
 
   private scheduleFlush(): void {
     if (this.flushTimer || this.inFlightBatches >= this.concurrency()) { return }
-    const windowMs = Math.min(100, numberVar(this.env.UPSTREAM_BATCH_WINDOW_MS, 20))
+    const windowMs = Math.min(100, numberVar(this.env.UPSTREAM_BATCH_WINDOW_MS, 100))
     const earliestDeadline = Math.min(...this.pending.map(request => request.payload.deadline))
     const delay = Math.max(0, Math.min(windowMs, earliestDeadline - Date.now() - 1))
     this.flushTimer = setTimeout(() => this.dispatch(), delay)
