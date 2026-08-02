@@ -6,44 +6,77 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "deeplx-serverless",
   "main": "src/index.ts",
-  "compatibility_date": "2025-07-01",
+  "compatibility_date": "2026-07-29",
+  "compatibility_flags": ["nodejs_compat"],
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "logs": {
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.01
+    }
   },
-  /**
-   * Smart Placement
-   * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
-   */
-  // "placement": { "mode": "smart" },
-
-  /**
-   * Bindings
-   * Bindings allow your Worker to interact with resources on the Cloudflare Developer Platform, including
-   * databases, object storage, AI inference, real-time communication and more.
-   * https://developers.cloudflare.com/workers/runtime-apis/bindings/
-   */
-
-  /**
-   * Environment Variables
-   * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-   */
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "TRANSLATION_COORDINATOR",
+        "class_name": "TranslationCoordinator"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["TranslationCoordinator"]
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "deeplx-cache",
+      "database_id": "4b54c288-309c-4c99-85e8-522e040b1cee",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "JOB_QUEUE",
+        "queue": "deeplx-jobs"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "deeplx-jobs",
+        "max_batch_size": 5,
+        "max_batch_timeout": 1,
+        "max_retries": 3,
+        "retry_delay": 5,
+        "dead_letter_queue": "deeplx-jobs-dlq"
+      },
+      {
+        "queue": "deeplx-jobs-dlq",
+        "max_batch_size": 5,
+        "max_batch_timeout": 1,
+        "max_retries": 0
+      }
+    ]
+  },
+  "triggers": {
+    "crons": ["17 3 * * *"]
+  },
   "vars": {
-    // "token": "test1,test2"
+    "UPSTREAM_RPS": "2",
+    "UPSTREAM_BURST": "4",
+    "UPSTREAM_CONCURRENCY": "2",
+    "UPSTREAM_BATCH_WINDOW_MS": "100",
+    "SYNC_DEADLINE_MS": "5000",
+    "ASYNC_DEADLINE_MS": "60000",
+    "SYNC_MAX_CHARS": "3000",
+    "ASYNC_MAX_CHARS": "100000",
+    "CACHE_TTL_SECONDS": "2592000",
+    "EDGE_CACHE_TTL_SECONDS": "86400"
   }
-  /**
-   * Note: Use secrets to store sensitive data.
-   * https://developers.cloudflare.com/workers/configuration/secrets/
-   */
-
-  /**
-   * Static Assets
-   * https://developers.cloudflare.com/workers/static-assets/binding/
-   */
-  // "assets": { "directory": "./public/", "binding": "ASSETS" },
-
-  /**
-   * Service Bindings (communicate between multiple Workers)
-   * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-   */
-  // "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
 }
