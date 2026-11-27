@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="使用 DeepLX 翻译文本。">
+  <title>DeepLX 翻译</title>
+  <link rel="stylesheet" href="/vendor/pico-2.1.1.min.css">
+  <link rel="stylesheet" href="/translate-ui.css">
+  <script src="/translate-ui.js" type="module"></script>
+</head>
+<body>
+  <header class="masthead">
+    <span class="mark" aria-hidden="true">译</span>
+    <span>DeepLX</span>
+  </header>
+  <main>
+    <h1>文本翻译</h1>
+    <form id="translator">
+      <div class="pdf-tools">
+        <button type="button" id="import-pdf">导入 PDF</button>
+        <input id="pdf-file" type="file" accept=".pdf,application/pdf" hidden>
+        <span id="pdf-name"></span>
+      </div>
+      <div class="workspace">
+        <section class="pane">
+          <div class="pane-head">
+            <label for="source">原文</label>
+            <select id="source-language" aria-label="原文语言">
+              <option value="">自动检测</option>
+            </select>
+          </div>
+          <textarea id="source" placeholder="输入或粘贴文本" spellcheck="false" dir="auto" required></textarea>
+          <div class="pane-foot">
+            <span id="count" class="count">0 / 3000</span>
+            <button type="button" id="clear" disabled>清空</button>
+          </div>
+        </section>
+        <section class="pane result">
+          <div class="pane-head">
+            <label for="translation">译文</label>
+            <select id="target-language" aria-label="目标语言"></select>
+          </div>
+          <textarea id="translation" placeholder="译文将在这里显示" dir="auto" readonly></textarea>
+          <div class="pane-foot">
+            <span id="detected"></span>
+            <button type="button" id="copy" disabled>复制译文</button>
+          </div>
+        </section>
+      </div>
+      <label id="auth" hidden>API 密钥
+        <input id="token" type="password" autocomplete="off" spellcheck="false">
+      </label>
+      <div class="actions">
+        <button id="submit" type="submit" disabled>翻译</button>
+        <p id="status" role="status"></p>
+      </div>
+    </form>
+  </main>
+</body>
+</html>

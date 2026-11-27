@@ -14,6 +14,7 @@
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.19.0",
+    "pdfjs-dist": "6.5.438",
     "typescript": "^5.8.3",
     "vitest": "^4.1.10",
     "wrangler": "^4.114.0"
